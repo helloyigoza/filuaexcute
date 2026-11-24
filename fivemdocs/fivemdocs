@@ -1,0 +1,88 @@
+# FiveM Kaynak Kodu Dokümantasyonu: Belirtilen Terimler ve Klasörler
+
+Bu doküman, FiveM'in GitHub reposu (https://github.com/citizenfx/fivem) üzerinden belirtilen terimleri ve önerilen klasörleri temel alarak oluşturulmuştur. Araştırmalar, web aramaları ve sayfa taramaları yoluyla yapılmış olup, doğrudan kod snippet'leri erişim kısıtlamaları nedeniyle sınırlıdır. Ancak, mevcut özetler, dosya yolları ve bağlamlar kullanılarak kapsamlı bir açıklama hazırlanmıştır. Doküman, her terim için amaç, kullanım, ilgili dosyalar ve potansiyel işlevsellikleri kapsar. Bilgiler, FiveM'in kaynak yönetimi, script yükleme ve runtime mekanizmalarına odaklanır.
+
+Doküman yapısı:
+- **Arama Terimleri**: Her terim için detaylı açıklama.
+- **Önerilen Klasörler**: Klasör özetleri ve ilgili bileşenler.
+- **Genel Notlar**: FiveM mimarisi hakkında genel bilgiler.
+
+## Arama Terimleri
+
+### 1. class ResourceImpl
+- **Amaç ve İşlevsellik**: `ResourceImpl`, FiveM'de kaynak (resource) yönetiminin temel implementasyon sınıfı gibi görünmektedir. Bu sınıf, bir kaynağın (örneğin bir mod veya script paketi) yaşam döngüsünü yönetir: yükleme, başlatma, durdurma ve olay işleme. Kaynaklar, FiveM'in modüler yapısının temel birimidir ve bu sınıf, soyut `Resource` arayüzünün somut implementasyonunu sağlar. Üyeleri arasında olay tetikleyiciler (events), durum yönetimi (state) ve script entegrasyonu bulunabilir.
+- **İlgili Dosyalar ve Bağlam**:
+  - `code/components/citizen-resources-core/include/Resource.h`: Kaynak sınıfı tanımlarını içerir. Burada `fwEvent<>` gibi olaylar tanımlanır (örneğin `OnLoad` için).
+  - `code/components/citizen-resources-core/src/ResourceManager.cpp`: Kaynak yönetimi implementasyonu, `ResourceImpl` ile ilgili çağrılar içerebilir.
+  - Kullanım Örnekleri: Kaynak başlatıldığında (`Start`) veya durdurulduğunda (`Stop`) çağrılır. Crash'lerde zaman uyarıları (`ResourceTimeWarnings`) ile ilişkilendirilebilir.
+- **Not**: Doğrudan "class ResourceImpl" arama sonuçlarında snippet yok, ancak `Resource` sınıfı ile ilişkili. Muhtemelen internal bir implementasyon.
+
+### 2. Resource::Start ve Resource::Stop Fonksiyonları
+- **Amaç ve İşlevsellik**: 
+  - `Resource::Start`: Bir kaynağın başlatılmasını tetikler. Bu fonksiyon, kaynağın script'lerini yükler, olayları bağlar ve runtime'a entegre eder. Başlatma sonrası `OnLoad` gibi olaylar çağrılır. Kaynaklar, FiveM sunucusunda dinamik olarak yönetilir; bu fonksiyon, sunucu başlangıcında veya manuel komutlarla kullanılır.
+  - `Resource::Stop`: Kaynağı durdurur, script'leri temizler, olayları kaldırır ve kaynakları serbest bırakır. Durdurma sonrası temizleme işlemleri (cleanup) içerir, örneğin state bag'leri sıfırlama.
+- **İlgili Dosyalar ve Bağlam**:
+  - `code/components/citizen-resources-core/src/ResourceEventComponent.cpp`: `Resource::Start` için "An event that is *queued* after a resource has started." açıklaması var. Kaynak adı parametre alır.
+  - `code/components/citizen-resources-core/include/Resource.h`: Fonksiyon imzaları burada tanımlı. `Start` için yükleme sonrası görevler, `Stop` için durdurma sonrası olaylar.
+  - `code/components/citizen-server-impl/src/ServerResources.cpp`: Sunucu tarafında kaynak başlatma/durdurma mantığı.
+  - Kullanım Örnekleri: Sunucu komutları gibi `start resource_name` veya `stop resource_name`. Event'ler: `OnResourceStart` ve `OnResourceStop`.
+- **Not**: Bu fonksiyonlar, kaynak yaşam döngüsünün çekirdeği. Crash'lerde `ResourceTimeWarnings` ile bağlantılı olabilir (örneğin uzun süren start işlemleri).
+
+### 3. fwEvent<std::vector<char>*> Runtime
+- **Amaç ve İşlevsellik**: Bu, script injection (script enjeksiyonu) için bir runtime olayı gibi görünür. `fwEvent`, FiveM'in olay sistemi (event system) parçasıdır ve `std::vector<char>*` parametresi, binary veri (örneğin script kodu) taşıyabilir. Runtime'da script'lerin dinamik yüklenmesi veya modifikasyonu için kullanılır. Script injection, external script'lerin runtime'da enjekte edilmesini sağlar, güvenlik riskleri taşıyabilir.
+- **İlgili Dosyalar ve Bağlam**:
+  - Doğrudan snippet bulunamadı, ancak `code/components/citizen-scripting-core/` altında runtime olayları ile ilgili. `ScriptRuntime` sınıfları (Lua veya V8) ile entegre.
+  - Potansiyel Kullanım: `Runtime` olayı, script verisini (`std::vector<char>*`) alarak işler, örneğin Lua veya JS script'lerini yükler.
+- **Not**: Bu terim nadir, belki custom bir event. Scripting-core ile ilişkili.
+
+### 4. ResourceTimeWarnings
+- **Amaç ve İşlevsellik**: Kaynak zaman uyarıları (time warnings) için bir mekanizma. Kaynakların uzun süren işlemleri (örneğin script execution timeouts) tespit eder ve crash'lerde loglanır. Performans izleme için kullanılır; örneğin bir kaynak frame süresini aşıyorsa uyarı verir. Devtools komponentinde yer alır.
+- **İlgili Dosyalar ve Bağlam**:
+  - `code/components/citizen-devtools/src/ResourceTimeWarnings.cpp`: Ana implementasyon dosyası. Zaman uyarılarını işler, loglar ve potansiyel crash'leri önler.
+  - `code/components/citizen-scripting-core/include/Profiler.h`: Profilci ile entegre, zaman ölçümü için.
+  - Kullanım Örnekleri: Crash log'larında görünür, örneğin "ResourceTimeWarnings: Resource X took too long".
+- **Not**: Geliştirici araçları (devtools) parçası, performans optimizasyonu için kritik.
+
+### 5. Script Loading Mekanizması (scripting-core, lua-runtime, ScriptRuntime)
+- **Amaç ve İşlevsellik**: FiveM'in script yükleme sistemi, birden fazla backend destekler (Lua, JS, C#). `scripting-core` temel altyapı sağlar; `lua-runtime` Lua-specific runtime; `ScriptRuntime` genel script runtime arayüzü.
+  - `scripting-core`: Script entegrasyonu, native fonksiyonlar ve event'ler.
+  - `lua-runtime`: Lua script'lerini yükler, çalıştırır (LuaJIT tabanlı).
+  - `ScriptRuntime`: Soyut sınıf, farklı runtime'lar için (LuaScriptRuntime, V8ScriptRuntime).
+- **İlgili Dosyalar ve Bağlam**:
+  - `code/components/citizen-scripting-core/src/ScriptHost.cpp`: Script hosting ve invocation.
+  - `code/components/citizen-scripting-lua/src/LuaScriptRuntime.cpp`: Lua runtime implementasyonu.
+  - `code/components/citizen-scripting-v8/src/V8ScriptRuntime.cpp`: JS (V8) runtime.
+  - `code/components/citizen-scripting-core/src/ResourceScriptingComponent.cpp`: Kaynak-script entegrasyonu.
+  - Kullanım Örnekleri: Script'ler `fxmanifest.lua` ile yüklenir, runtime'da native'ler çağrılır.
+- **Not**: Çoklu dil desteği (Lua, JS), profiler ile entegre.
+
+## Önerilen Klasörler
+
+### code/components/citizen-resources-core/
+- **Özet**: Kaynak yönetimi core komponentleri. State handling, olaylar ve kaynak yaşam döngüsü burada yönetilir.
+- **Ana Dosyalar**:
+  - `component.json`: Komponent konfigürasyonu (bağımlılıklar, state bag'ler).
+  - `src/ResourceManager.cpp`: Kaynak ekleme/kaldırma.
+  - `include/Resource.h`: Kaynak sınıfı tanımları.
+- **Amaç**: Client/server kaynak senkronizasyonu, OnLoad/Start/Stop mekanizmaları.
+
+### code/components/citizen-scripting-core/
+- **Özet**: Scripting altyapısı. Native fonksiyonlar, profiler ve script invocation.
+- **Ana Dosyalar**:
+  - `src/ScriptHost.cpp`: Script hosting.
+  - `include/fxScripting.idl`: Scripting arayüzü.
+  - `src/Profiler.cpp`: Zaman ölçümü (ResourceTimeWarnings ile ilişkili).
+- **Amaç**: Farklı scripting backend'leri (Lua, V8) entegrasyonu, event/script fonksiyonları.
+
+### code/components/citizen-resources-client/
+- **Özet**: Client-side kaynak yönetimi. Asset caching, KVP (key-value pairs) natives.
+- **Ana Dosyalar**:
+  - `component.json`: Client konfigürasyonu.
+  - `src/`: Client-specific kaynak yükleme.
+- **Amaç**: Client'da kaynak yükleme, senkronizasyon (sunucudan veri alma).
+
+## Genel Notlar
+- **FiveM Mimarisi**: FiveM, C++ tabanlı (Rage engine) ve script entegrasyonu ile çalışır. Kaynaklar modülerdir; scripting Lua/JS ile yapılır. Runtime'lar (Lua/V8) ayrı komponentler.
+- **Güvenlik ve Performans**: ResourceTimeWarnings gibi araçlar crash önleme için. Script injection dikkatli kullanılmalı.
+- **Kaynaklar**: Bilgiler GitHub'dan derlendi. Tam kod için repo'yu clone edin. Güncel tarih: Ocak 2026, repo commit'leri değişebilir.
+- **Öneriler**: Daha detaylı inceleme için Visual Studio ile repo'yu açın veya arama araçları kullanın.
